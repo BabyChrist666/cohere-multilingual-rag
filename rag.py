@@ -36,7 +36,7 @@ class MultilingualRAG:
         api_key: Optional[str] = None,
         collection_name: str = "multilingual_rag",
         persist_directory: str = "./chroma_db",
-        generation_model: str = "command-r-plus"
+        generation_model: str = "command-r-08-2024"
     ):
         self.api_key = api_key or os.getenv("COHERE_API_KEY")
         if not self.api_key:
@@ -194,28 +194,26 @@ class MultilingualRAG:
         context_text = "\n\n---\n\n".join([d["text"] for d in context_docs])
 
         # Step 3: Generate answer
-        system_prompt = """You are a helpful multilingual assistant.
+        preamble = """You are a helpful multilingual assistant.
 Answer questions based ONLY on the provided context.
 If the context doesn't contain enough information, say so.
 Always respond in the same language as the question.
 Be concise but thorough."""
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"""Context:
+        user_message = f"""Context:
 {context_text}
 
 Question: {question}
 
-Answer based on the context above:"""}
-        ]
+Answer based on the context above:"""
 
         response = self.cohere_client.chat(
             model=self.generation_model,
-            messages=messages
+            message=user_message,
+            preamble=preamble
         )
 
-        answer = response.message.content[0].text
+        answer = response.text
 
         # Calculate confidence based on rerank scores
         avg_score = sum(r["relevance_score"] for r in reranked) / len(reranked)
