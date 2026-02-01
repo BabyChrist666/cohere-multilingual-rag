@@ -20,7 +20,7 @@
 
 **`[ CROSS-LINGUAL KNOWLEDGE EXTRACTION // POWERED BY COHERE ]`**
 
-*Query in any tongue. Retrieve from the abyss.*
+*Query in any language. Retrieve with precision.*
 
 ---
 
