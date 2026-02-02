@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multilingual RAG System - Cross-Lingual Retrieval-Augmented Generation</title>
+    <meta name="description" content="Retrieval-augmented generation supporting 100+ languages with Cohere Embed v3, semantic reranking, and citation generation.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #050507;
+            --bg-secondary: #0a0a0f;
+            --bg-card: #0d0d14;
+            --bg-card-hover: #12121c;
+            --accent: #6e56cf;
+            --accent-glow: #7c66dc;
+            --accent-dim: rgba(110,86,207,0.12);
+            --accent-border: rgba(110,86,207,0.25);
+            --text-primary: #ededef;
+            --text-secondary: #9494a0;
+            --text-tertiary: #5e5e6e;
+            --border: rgba(255,255,255,0.06);
+            --success: #45d483;
+        }
+
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Ambient background */
+        .ambient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .ambient-bg::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background:
+                radial-gradient(ellipse 600px 600px at 30% 20%, rgba(110,86,207,0.07), transparent),
+                radial-gradient(ellipse 500px 500px at 70% 60%, rgba(110,86,207,0.04), transparent),
+                radial-gradient(ellipse 400px 400px at 50% 80%, rgba(69,212,131,0.02), transparent);
+            animation: drift 25s ease-in-out infinite alternate;
+        }
+
+        @keyframes drift {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(30px, -20px) rotate(1deg); }
+            66% { transform: translate(-20px, 15px) rotate(-0.5deg); }
+            100% { transform: translate(10px, -10px) rotate(0.5deg); }
+        }
+
+        /* Noise overlay */
+        .noise-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+            opacity: 0.03;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            background-repeat: repeat;
+        }
+
+        .content-wrapper {
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 0 2rem;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(5,5,7,0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .nav-logo-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: var(--accent-dim);
+            border: 1px solid var(--accent-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: var(--accent-glow);
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 450;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+
+        .nav-github {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 1rem;
+            border-radius: 8px;
+            background: var(--accent-dim);
+            border: 1px solid var(--accent-border);
+            color: var(--accent-glow) !important;
+            font-weight: 500;
+            font-size: 0.82rem;
+            transition: all 0.2s;
+        }
+
+        .nav-github:hover {
+            background: rgba(110,86,207,0.2);
+            color: var(--text-primary) !important;
+        }
+
+        .nav-github svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Main content */
+        main {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* Hero */
+        .hero {
+            padding-top: 160px;
+            padding-bottom: 80px;
+            text-align: center;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 1rem;
+            border-radius: 100px;
+            background: var(--accent-dim);
+            border: 1px solid var(--accent-border);
+            color: var(--accent-glow);
+            font-size: 0.78rem;
+            font-weight: 500;
+            margin-bottom: 2rem;
+            letter-spacing: 0.02em;
+        }
+
+        .hero-badge::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-glow);
+            box-shadow: 0 0 8px var(--accent-glow);
+        }
+
+        .hero h1 {
+            font-size: 3.2rem;
+            font-weight: 700;
+            line-height: 1.15;
+            letter-spacing: -0.035em;
+            margin-bottom: 1.5rem;
+            max-width: 720px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero h1 .accent {
+            background: linear-gradient(135deg, var(--accent-glow), var(--success));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            line-height: 1.7;
+            color: var(--text-secondary);
+            max-width: 560px;
+            margin: 0 auto 2.5rem;
+        }
+
+        .hero-actions {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.7rem 1.5rem;
+            border-radius: 10px;
+            background: var(--accent);
+            color: white;
+            text-decoration: none;
+            font-size: 0.88rem;
+            font-weight: 550;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-glow);
+            box-shadow: 0 0 30px rgba(110,86,207,0.3);
+        }
+
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.7rem 1.5rem;
+            border-radius: 10px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.88rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+            border-color: var(--accent-border);
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 100px;
+        }
+
+        .stat-item {
+            background: var(--bg-secondary);
+            padding: 2rem 1.5rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.4rem;
+            letter-spacing: -0.02em;
+        }
+
+        .stat-value .accent {
+            color: var(--accent-glow);
+        }
+
+        .stat-label {
+            font-size: 0.78rem;
+            color: var(--text-tertiary);
+            font-weight: 450;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        /* Section styling */
+        .section {
+            margin-bottom: 100px;
+        }
+
+        .section-label {
+            font-size: 0.75rem;
+            font-weight: 550;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent-glow);
+            margin-bottom: 0.75rem;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            margin-bottom: 0.75rem;
+        }
+
+        .section-desc {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.7;
+            margin-bottom: 3rem;
+            max-width: 560px;
+        }
+
+        /* Feature cards */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--accent-border);
+            transform: translateY(-2px);
+        }
+
+        .feature-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            background: var(--accent-dim);
+            border: 1px solid var(--accent-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.25rem;
+            font-size: 1.2rem;
+        }
+
+        .feature-card h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 0.6rem;
+            letter-spacing: -0.01em;
+        }
+
+        .feature-card p {
+            font-size: 0.83rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        /* Architecture diagram */
+        .arch-diagram {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 3rem 2rem;
+            overflow-x: auto;
+        }
+
+        .arch-flow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            min-width: max-content;
+        }
+
+        .arch-node {
+            padding: 1rem 1.5rem;
+            border-radius: 10px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            text-align: center;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .arch-node:hover {
+            border-color: var(--accent-border);
+        }
+
+        .arch-node-label {
+            font-size: 0.72rem;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.3rem;
+        }
+
+        .arch-node-name {
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .arch-node.accent-node {
+            border-color: var(--accent-border);
+            background: var(--accent-dim);
+        }
+
+        .arch-node.accent-node .arch-node-name {
+            color: var(--accent-glow);
+        }
+
+        .arch-arrow {
+            color: var(--text-tertiary);
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+
+        /* Code section */
+        .code-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .code-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-secondary);
+        }
+
+        .code-tab {
+            padding: 0.85rem 1.5rem;
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            border: none;
+            background: none;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .code-tab:hover {
+            color: var(--text-secondary);
+        }
+
+        .code-tab.active {
+            color: var(--accent-glow);
+            border-bottom-color: var(--accent-glow);
+        }
+
+        .code-panel {
+            display: none;
+            padding: 2rem;
+        }
+
+        .code-panel.active {
+            display: block;
+        }
+
+        .code-panel pre {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            line-height: 1.75;
+            color: var(--text-secondary);
+            overflow-x: auto;
+        }
+
+        .code-panel pre .keyword {
+            color: var(--accent-glow);
+        }
+
+        .code-panel pre .string {
+            color: var(--success);
+        }
+
+        .code-panel pre .comment {
+            color: var(--text-tertiary);
+        }
+
+        .code-panel pre .func {
+            color: #e0c285;
+        }
+
+        /* Tech stack */
+        .tool-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .tool-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.6rem 1.2rem;
+            border-radius: 10px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+        }
+
+        .tool-item:hover {
+            border-color: var(--accent-border);
+            background: var(--bg-card-hover);
+        }
+
+        .tech-tag {
+            font-size: 0.83rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .tool-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-glow);
+        }
+
+        .tool-dot.green {
+            background: var(--success);
+        }
+
+        .tool-dot.dim {
+            background: var(--text-tertiary);
+        }
+
+        /* CTA */
+        .cta {
+            text-align: center;
+            padding: 80px 0;
+            margin-bottom: 0;
+        }
+
+        .cta h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            margin-bottom: 1rem;
+        }
+
+        .cta p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-bottom: 2rem;
+            max-width: 480px;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.7;
+        }
+
+        .cta-actions {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 2.5rem 2rem;
+            text-align: center;
+        }
+
+        .footer-inner {
+            max-width: 1080px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .footer-text {
+            font-size: 0.78rem;
+            color: var(--text-tertiary);
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .footer-links a {
+            font-size: 0.78rem;
+            color: var(--text-tertiary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-links a:hover {
+            color: var(--text-secondary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            nav {
+                padding: 0 1rem;
+            }
+
+            .nav-links {
+                gap: 1rem;
+            }
+
+            .nav-links a:not(.nav-github) {
+                display: none;
+            }
+
+            main {
+                padding: 0 1rem;
+            }
+
+            .hero {
+                padding-top: 120px;
+                padding-bottom: 60px;
+            }
+
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .hero p {
+                font-size: 0.95rem;
+            }
+
+            .hero-actions {
+                flex-direction: column;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                margin-bottom: 60px;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .section {
+                margin-bottom: 60px;
+            }
+
+            .section-title {
+                font-size: 1.5rem;
+            }
+
+            .arch-flow {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+
+            .arch-arrow {
+                transform: rotate(90deg);
+            }
+
+            .footer-inner {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .cta h2 {
+                font-size: 1.5rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .hero h1 {
+                font-size: 1.65rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .code-tabs {
+                overflow-x: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-bg"></div>
+    <div class="noise-overlay"></div>
+
+    <div class="content-wrapper">
+        <!-- Navigation -->
+        <nav>
+            <a href="#" class="nav-logo">
+                <div class="nav-logo-icon">R</div>
+                Multilingual RAG
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#architecture">Architecture</a>
+                <a href="#quickstart">Quick Start</a>
+                <a href="https://github.com/BabyChrist666/cohere-multilingual-rag" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                    GitHub
+                </a>
+            </div>
+        </nav>
+
+        <main>
+            <!-- Hero -->
+            <section class="hero">
+                <div class="hero-badge">Multilingual RAG</div>
+                <h1>Ask in any language.<br><span class="accent">Retrieve with precision.</span></h1>
+                <p>Cross-lingual retrieval-augmented generation powered by Cohere Embed v3 and semantic reranking. Query in one language, retrieve documents in another, with full citation support.</p>
+                <div class="hero-actions">
+                    <a href="#quickstart" class="btn-primary">Get Started</a>
+                    <a href="https://github.com/BabyChrist666/cohere-multilingual-rag" target="_blank" class="btn-secondary">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                        View Source
+                    </a>
+                </div>
+            </section>
+
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-value"><span class="accent">100+</span></div>
+                    <div class="stat-label">Languages</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">Semantic</div>
+                    <div class="stat-label">Reranking</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">Cross-Lingual</div>
+                    <div class="stat-label">Retrieval</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">Citation</div>
+                    <div class="stat-label">Generation</div>
+                </div>
+            </div>
+
+            <!-- Features -->
+            <section class="section" id="features">
+                <div class="section-label">Features</div>
+                <h2 class="section-title">Precise multilingual retrieval</h2>
+                <p class="section-desc">Everything you need to build production-ready RAG systems that work seamlessly across languages and document types.</p>
+
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">&#127760;</div>
+                        <h3>Multilingual Embeddings</h3>
+                        <p>Cohere Embed v3 generates dense vectors for 100+ languages, capturing semantic meaning regardless of the source language.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#9878;</div>
+                        <h3>Semantic Reranking</h3>
+                        <p>Cohere Rerank v3 re-scores candidate results with cross-encoder precision, pushing the most relevant documents to the top.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#128256;</div>
+                        <h3>Cross-Lingual Retrieval</h3>
+                        <p>Query in English, retrieve documents in Japanese, French, or Arabic. The shared embedding space bridges language barriers.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#128206;</div>
+                        <h3>Citation Generation</h3>
+                        <p>Every answer includes precise citations linking back to source documents with chunk-level references for full traceability.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#128269;</div>
+                        <h3>Vector Search</h3>
+                        <p>ChromaDB-backed vector storage with efficient approximate nearest neighbor search for fast retrieval at scale.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#9889;</div>
+                        <h3>Async Pipeline</h3>
+                        <p>Fully asynchronous ingestion and query pipeline built with Python asyncio for high-throughput document processing.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Architecture -->
+            <section class="section" id="architecture">
+                <div class="section-label">Architecture</div>
+                <h2 class="section-title">End-to-end retrieval pipeline</h2>
+                <p class="section-desc">From multilingual query to cited response, every stage is designed for precision and speed.</p>
+
+                <div class="arch-diagram">
+                    <div class="arch-flow">
+                        <div class="arch-node">
+                            <div class="arch-node-label">Input</div>
+                            <div class="arch-node-name">Query (any language)</div>
+                        </div>
+                        <div class="arch-arrow">&#8594;</div>
+                        <div class="arch-node accent-node">
+                            <div class="arch-node-label">Embed</div>
+                            <div class="arch-node-name">Cohere Embed v3</div>
+                        </div>
+                        <div class="arch-arrow">&#8594;</div>
+                        <div class="arch-node">
+                            <div class="arch-node-label">Search</div>
+                            <div class="arch-node-name">ChromaDB Vector Search</div>
+                        </div>
+                        <div class="arch-arrow">&#8594;</div>
+                        <div class="arch-node accent-node">
+                            <div class="arch-node-label">Rerank</div>
+                            <div class="arch-node-name">Cohere Rerank v3</div>
+                        </div>
+                        <div class="arch-arrow">&#8594;</div>
+                        <div class="arch-node">
+                            <div class="arch-node-label">Build</div>
+                            <div class="arch-node-name">Citation Builder</div>
+                        </div>
+                        <div class="arch-arrow">&#8594;</div>
+                        <div class="arch-node">
+                            <div class="arch-node-label">Output</div>
+                            <div class="arch-node-name">Response</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Code Section -->
+            <section class="section" id="quickstart">
+                <div class="section-label">Quick Start</div>
+                <h2 class="section-title">Up and running in minutes</h2>
+                <p class="section-desc">Install the package, ingest your documents, and start querying across languages.</p>
+
+                <div class="code-section">
+                    <div class="code-tabs">
+                        <button class="code-tab active" onclick="showTab('install')">Install</button>
+                        <button class="code-tab" onclick="showTab('ingest')">Ingest Documents</button>
+                        <button class="code-tab" onclick="showTab('query')">Query</button>
+                    </div>
+                    <div id="tab-install" class="code-panel active">
+                        <pre><span class="comment"># Clone the repository</span>
+git clone https://github.com/BabyChrist666/cohere-multilingual-rag.git
+<span class="keyword">cd</span> cohere-multilingual-rag
+
+<span class="comment"># Install dependencies</span>
+pip install -r requirements.txt
+
+<span class="comment"># Set your Cohere API key</span>
+<span class="keyword">export</span> COHERE_API_KEY=<span class="string">"your-api-key"</span>
+
+<span class="comment"># Start the FastAPI server</span>
+uvicorn app.main:app --reload</pre>
+                    </div>
+                    <div id="tab-ingest" class="code-panel">
+                        <pre><span class="keyword">from</span> rag.pipeline <span class="keyword">import</span> IngestionPipeline
+<span class="keyword">from</span> rag.config <span class="keyword">import</span> Settings
+
+settings = <span class="func">Settings</span>()
+pipeline = <span class="func">IngestionPipeline</span>(settings)
+
+<span class="comment"># Ingest documents in any language</span>
+<span class="keyword">await</span> pipeline.<span class="func">ingest</span>(
+    documents=[
+        {<span class="string">"text"</span>: <span class="string">"Les modeles de langage sont fascinants."</span>,
+         <span class="string">"metadata"</span>: {<span class="string">"lang"</span>: <span class="string">"fr"</span>, <span class="string">"source"</span>: <span class="string">"article_01"</span>}},
+        {<span class="string">"text"</span>: <span class="string">"Sprachmodelle sind faszinierend."</span>,
+         <span class="string">"metadata"</span>: {<span class="string">"lang"</span>: <span class="string">"de"</span>, <span class="string">"source"</span>: <span class="string">"article_02"</span>}},
+    ],
+    collection=<span class="string">"multilingual_docs"</span>
+)</pre>
+                    </div>
+                    <div id="tab-query" class="code-panel">
+                        <pre><span class="keyword">from</span> rag.pipeline <span class="keyword">import</span> QueryPipeline
+
+query_pipeline = <span class="func">QueryPipeline</span>(settings)
+
+<span class="comment"># Query in English, retrieve across all languages</span>
+result = <span class="keyword">await</span> query_pipeline.<span class="func">query</span>(
+    question=<span class="string">"What makes language models interesting?"</span>,
+    collection=<span class="string">"multilingual_docs"</span>,
+    top_k=<span class="func">10</span>,
+    rerank=<span class="keyword">True</span>
+)
+
+<span class="comment"># Access cited results</span>
+<span class="keyword">for</span> citation <span class="keyword">in</span> result.citations:
+    <span class="func">print</span>(<span class="keyword">f</span><span class="string">"[{citation.source}] {citation.text}"</span>)</pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tech Stack -->
+            <section class="section">
+                <div class="section-label">Tech Stack</div>
+                <h2 class="section-title">Built with modern tools</h2>
+                <p class="section-desc">A focused set of production-grade libraries for multilingual retrieval.</p>
+
+                <div class="tool-grid">
+                    <div class="tool-item">
+                        <div class="tool-dot"></div>
+                        <span class="tech-tag">Python</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-dot"></div>
+                        <span class="tech-tag">Cohere Embed v3</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-dot"></div>
+                        <span class="tech-tag">Cohere Rerank v3</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-dot green"></div>
+                        <span class="tech-tag">ChromaDB</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-dot green"></div>
+                        <span class="tech-tag">FastAPI</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-dot dim"></div>
+                        <span class="tech-tag">Pydantic</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-dot dim"></div>
+                        <span class="tech-tag">asyncio</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- CTA -->
+            <section class="cta">
+                <h2>Start retrieving across languages</h2>
+                <p>Build multilingual RAG pipelines with semantic precision. Open source and ready to deploy.</p>
+                <div class="cta-actions">
+                    <a href="https://github.com/BabyChrist666/cohere-multilingual-rag" target="_blank" class="btn-primary">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                        View on GitHub
+                    </a>
+                    <a href="mailto:istiaqrafi39@gmail.com" class="btn-secondary">Contact</a>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer>
+            <div class="footer-inner">
+                <span class="footer-text">Multilingual RAG System</span>
+                <div class="footer-links">
+                    <a href="https://github.com/BabyChrist666/cohere-multilingual-rag" target="_blank">GitHub</a>
+                    <a href="https://github.com/BabyChrist666" target="_blank">All Projects</a>
+                    <a href="mailto:istiaqrafi39@gmail.com">Contact</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        function showTab(tabName) {
+            document.querySelectorAll('.code-tab').forEach(function(tab) {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.code-panel').forEach(function(panel) {
+                panel.classList.remove('active');
+            });
+
+            event.currentTarget.classList.add('active');
+            document.getElementById('tab-' + tabName).classList.add('active');
+        }
+
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                var target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
